@@ -6,11 +6,17 @@ export default function AIChat() {
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const generateFallbackReply = (text) => {
+    const cleaned = (text || "").trim();
+    if (!cleaned) return "Please type a message.";
+    return `I am temporarily unavailable from the server, but I received: "${cleaned}". Please try again shortly.`;
+  };
+
   const sendMessage = async () => {
 
-    if (!message.trim()) return;
+    if (!message.trim() || loading) return;
 
-    const userMessage = message;
+    const userMessage = message.trim();
 
     setChat(prev => [
       ...prev,
@@ -22,7 +28,7 @@ export default function AIChat() {
 
     try {
 
-      const res = await fetch("http://localhost:5000/api/ai/chat", {
+      const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -30,15 +36,14 @@ export default function AIChat() {
         body: JSON.stringify({ message: userMessage })
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error("Server error");
+        throw new Error(data.error || "Server error");
       }
-
-      const data = await res.json();
 
       setChat(prev => [
         ...prev,
-        { role: "ai", text: data.reply || "No response from AI" }
+        { role: "ai", text: data.reply || generateFallbackReply(userMessage) }
       ]);
 
     } catch (error) {
@@ -47,7 +52,7 @@ export default function AIChat() {
 
       setChat(prev => [
         ...prev,
-        { role: "ai", text: "AI is not available right now." }
+        { role: "ai", text: generateFallbackReply(userMessage) }
       ]);
 
     }
@@ -63,76 +68,58 @@ export default function AIChat() {
   };
 
   return (
-
-    <div className="w-80 h-full bg-white rounded-xl shadow-xl flex flex-col">
-
-      {/* Header */}
-
-      <div className="p-3 border-b font-bold text-lg text-center">
-        AI Assistant 🤖
+    <div className="h-full w-full overflow-hidden rounded-2xl bg-white flex flex-col">
+      <div className="border-b px-4 py-3">
+        <h3 className="text-center text-base font-bold text-slate-800">
+          AI Assistant
+        </h3>
+        <p className="text-center text-xs text-slate-500">
+          Quick ideas, explanations and support
+        </p>
       </div>
 
-
-      {/* Chat messages */}
-
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
 
         {chat.map((c, i) => (
-
-          <div key={i}>
-
+          <div key={i} className={c.role === "user" ? "text-right" : "text-left"}>
             {c.role === "user" ? (
-
-              <div className="text-right">
-                <span className="bg-blue-500 text-white px-3 py-1 rounded-lg">
-                  {c.text}
-                </span>
-              </div>
-
+              <span className="inline-block max-w-[85%] rounded-2xl bg-indigo-600 px-3 py-2 text-sm text-white">
+                {c.text}
+              </span>
             ) : (
-
-              <div>
-                <span className="bg-gray-200 px-3 py-1 rounded-lg">
-                  {c.text}
-                </span>
-              </div>
-
+              <span className="inline-block max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm text-slate-700 shadow">
+                {c.text}
+              </span>
             )}
-
           </div>
-
         ))}
 
         {loading && (
-          <p className="text-gray-500 text-sm">
+          <p className="text-sm text-slate-500">
             AI thinking...
           </p>
         )}
-
       </div>
 
+      <div className="border-t p-3">
+        <div className="flex gap-2 rounded-xl border border-slate-300 bg-white p-2">
+          <input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder="Ask AI..."
+            className="flex-1 bg-transparent px-1 py-1 text-sm outline-none"
+          />
 
-      {/* Input */}
-
-      <div className="p-3 border-t flex gap-2">
-
-        <input
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder="Ask AI..."
-          className="flex-1 border rounded px-2 py-1 outline-none"
-        />
-
-        <button
-          onClick={sendMessage}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 rounded"
-        >
-          Send
-        </button>
-
+          <button
+            onClick={sendMessage}
+            disabled={loading}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Sending..." : "Send"}
+          </button>
+        </div>
       </div>
-
     </div>
 
   );

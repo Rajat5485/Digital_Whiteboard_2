@@ -8,7 +8,7 @@ export default function Classroom() {
 
   const createClass = async () => {
 
-    const res = await fetch("http://localhost:5000/api/classroom/create", {
+    const res = await fetch("/api/classroom/create", {
 
       method: "POST",
 
@@ -23,6 +23,10 @@ export default function Classroom() {
 
     const data = await res.json();
 
+    if (data._id) {
+      localStorage.setItem("classId", data._id);
+    }
+
     alert("Class Code: " + data.code);
 
     navigate("/board");
@@ -35,7 +39,7 @@ export default function Classroom() {
 
     const code = prompt("Enter class code");
 
-    const res = await fetch("http://localhost:5000/api/classroom/join", {
+    const res = await fetch("/api/classroom/join", {
 
       method: "POST",
 
@@ -50,10 +54,12 @@ export default function Classroom() {
 
     const data = await res.json();
 
-    if (!data) {
+    if (!data || !data._id) {
       alert("Class not found");
       return;
     }
+
+    localStorage.setItem("classId", data._id);
 
     navigate("/board");
 

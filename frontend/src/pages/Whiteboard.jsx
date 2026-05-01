@@ -9,10 +9,10 @@ export default function Whiteboard() {
   const [color, setColor] = useState("#000000");
   const [tool, setTool] = useState("pencil");
   const [brushSize, setBrushSize] = useState(5);
+  const [showToolbar, setShowToolbar] = useState(true);
+  const [showChat, setShowChat] = useState(true);
 
   const navigate = useNavigate();
-
-  const userName = localStorage.getItem("userName");
 
   const logout = () => {
 
@@ -24,63 +24,54 @@ export default function Whiteboard() {
   };
 
   return (
+    <div className="h-screen bg-gray-50 flex flex-col">
+      {showToolbar && (
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 py-3">
+            <Toolbar
+              tool={tool}
+              setColor={setColor}
+              setTool={setTool}
+              setBrushSize={setBrushSize}
+              brushSize={brushSize}
+            />
+          </div>
+        </header>
+      )}
 
-    <div className="flex h-screen bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+      <main className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col">
+          <div className="bg-white border-b px-4 py-3 flex justify-between items-center">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">Digital Whiteboard</h1>
+              <p className="text-sm text-gray-500">Collaborative drawing and learning</p>
+            </div>
+            <button
+              onClick={() => navigate("/attendance")}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              View Attendance
+            </button>
+          </div>
 
-      <div className="w-56 bg-white shadow-xl p-4 self-start">
-
-        <Toolbar
-          setColor={setColor}
-          setTool={setTool}
-          setBrushSize={setBrushSize}
-          brushSize={brushSize}
-        />
-
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center">
-
-        <h2 className="text-white text-xl font-bold mb-3">
-         <div className="w-full flex justify-center mb-4">
-
-  <div className="bg-white/90 backdrop-blur-md px-6 py-2 rounded-xl shadow-lg">
-
-    <h2 className="text-lg font-semibold text-gray-800">
-      Hello, <span className="text-purple-600">{userName}</span> 👋
-    </h2>
-
-  </div>
-
-</div>
-        </h2>
-
-        <div className="bg-white rounded-xl shadow-2xl p-4">
-
-          <CanvasBoard
-            color={color}
-            tool={tool}
-            brushSize={brushSize}
-          />
-
+          <div className="flex-1 p-4">
+            <CanvasBoard
+              color={color}
+              tool={tool}
+              brushSize={brushSize}
+              showToolbar={showToolbar}
+              showChat={showChat}
+            />
+          </div>
         </div>
 
-        <button
-          onClick={logout}
-          className="mt-4 bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded"
-        >
-          Logout
-        </button>
-
-      </div>
-
-      <div className="w-80 bg-white shadow-xl">
-
-        <AIChat />
-
-      </div>
-
+        {showChat && (
+          <aside className="w-80 bg-white border-l shadow-sm">
+            <AIChat />
+          </aside>
+        )}
+      </main>
     </div>
-
   );
 
 }

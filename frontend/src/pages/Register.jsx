@@ -18,7 +18,7 @@ export default function Register() {
 
     try {
 
-      const res = await fetch("http://localhost:5000/api/auth/register", {
+      const res = await fetch("/api/auth/register", {
 
         method: "POST",
 
@@ -54,48 +54,61 @@ export default function Register() {
   };
 
   return (
-
-    <div className="h-screen flex items-center justify-center bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500">
-
-      <div className="bg-white p-10 rounded-xl shadow-2xl w-96">
-
-        <h1 className="text-3xl font-bold text-center mb-6">
-          Create Account
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 p-6 flex items-center justify-center">
+      <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white/95 p-8 shadow-2xl backdrop-blur-xl">
+        <p className="inline-flex rounded-full bg-fuchsia-100 px-3 py-1 text-xs font-semibold tracking-wide text-fuchsia-700">
+          GET STARTED
+        </p>
+        <h1 className="mt-4 text-3xl font-extrabold text-slate-800">
+          Create account
         </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Create a new profile and start using the whiteboard.
+        </p>
 
-        <input
-          type="text"
-          placeholder="Name"
-          value={name}
-          onChange={(e)=>setName(e.target.value)}
-          className="w-full border p-2 rounded mb-4"
-        />
+        <div className="mt-6 space-y-4">
+          <input
+            type="text"
+            placeholder="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+          />
 
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e)=>setEmail(e.target.value)}
-          className="w-full border p-2 rounded mb-4"
-        />
+          <input
+            type="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+          />
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e)=>setPassword(e.target.value)}
-          className="w-full border p-2 rounded mb-6"
-        />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+          />
 
-        <button
-          onClick={handleRegister}
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded"
-        >
-          Register
-        </button>
+          <button
+            onClick={handleRegister}
+            className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 font-semibold text-white shadow-lg transition hover:opacity-95"
+          >
+            Register
+          </button>
+        </div>
 
+        <p className="mt-5 text-center text-sm text-slate-600">
+          Already have an account?{" "}
+          <span
+            onClick={() => navigate("/")}
+            className="cursor-pointer font-semibold text-purple-700 hover:text-purple-800"
+          >
+            Login
+          </span>
+        </p>
       </div>
-
     </div>
 
   );

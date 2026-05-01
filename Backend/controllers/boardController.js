@@ -5,6 +5,10 @@ export const saveBoard = async (req, res) => {
   try {
     const { classId, strokes } = req.body;
 
+    if (!classId || !strokes) {
+      return res.status(400).json({ message: "classId and strokes are required" });
+    }
+
     let board = await Board.findOne({ classId });
 
     if (board) {
@@ -25,6 +29,10 @@ export const saveBoard = async (req, res) => {
 export const getBoard = async (req, res) => {
   try {
     const { classId } = req.params;
+
+    if (!classId) {
+      return res.status(400).json({ message: "classId is required" });
+    }
 
     const board = await Board.findOne({ classId });
 
