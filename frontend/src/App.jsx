@@ -16,6 +16,7 @@ export default function App() {
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/register" element={<Register />} />
         <Route path="/join/:classId" element={<JoinClass />} />
+        
       </Routes>
     </BrowserRouter>
   );

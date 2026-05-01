@@ -36,7 +36,7 @@ export default function Toolbar({ tool, setColor, setTool, setBrushSize, brushSi
           </button>
         ))}
       </div>
-
+   
       <div className="xl:min-w-[120px]">
         <label className="text-sm font-semibold text-slate-700">Color</label>
         <input
