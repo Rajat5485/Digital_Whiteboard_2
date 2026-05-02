@@ -992,9 +992,15 @@ export default function CanvasBoard({
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [teacherNotes, setTeacherNotes] = useState([]);
   const [mediaStream, setMediaStream] = useState(null);
+  const [textSelecting, setTextSelecting] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [textPosition, setTextPosition] = useState({x: 0, y: 0, width: 100, height: 20});
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [selectedArea, setSelectedArea] = useState(null);
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
+  const textInputRef = useRef(null);
 
   const isTeacher = userRole === "teacher";
   const isAllowedToDraw = canDraw || isTeacher;
@@ -1149,6 +1155,101 @@ export default function CanvasBoard({
     ctx.globalAlpha = 1;
   };
 
+  const floodFill = (startX, startY, fillColor) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    const startPos = (startY * canvas.width + startX) * 4;
+    const startR = data[startPos];
+    const startG = data[startPos + 1];
+    const startB = data[startPos + 2];
+    const startA = data[startPos + 3];
+
+    // Convert fillColor to RGB
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = 1;
+    tempCanvas.height = 1;
+    const tempCtx = tempCanvas.getContext("2d");
+    tempCtx.fillStyle = fillColor;
+    tempCtx.fillRect(0, 0, 1, 1);
+    const fillData = tempCtx.getImageData(0, 0, 1, 1).data;
+    const fillR = fillData[0];
+    const fillG = fillData[1];
+    const fillB = fillData[2];
+    const fillA = fillData[3];
+
+    if (startR === fillR && startG === fillG && startB === fillB && startA === fillA) {
+      return; // Already the same color
+    }
+
+    const stack = [[startX, startY]];
+    const visited = new Set();
+
+    while (stack.length > 0) {
+      const [x, y] = stack.pop();
+      const pos = (y * canvas.width + x) * 4;
+
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height || visited.has(`${x},${y}`)) {
+        continue;
+      }
+
+      const r = data[pos];
+      const g = data[pos + 1];
+      const b = data[pos + 2];
+      const a = data[pos + 3];
+
+      if (r === startR && g === startG && b === startB && a === startA) {
+        data[pos] = fillR;
+        data[pos + 1] = fillG;
+        data[pos + 2] = fillB;
+        data[pos + 3] = fillA;
+        visited.add(`${x},${y}`);
+
+        stack.push([x + 1, y]);
+        stack.push([x - 1, y]);
+        stack.push([x, y + 1]);
+        stack.push([x, y - 1]);
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  };
+
+  const handleTextSubmit = () => {
+    if (textInput.trim()) {
+      drawText(textPosition.x, textPosition.y, textInput.trim(), color, brushSize);
+      if (classId) {
+        socket.emit("draw-text", {
+          classId,
+          x: textPosition.x,
+          y: textPosition.y,
+          text: textInput.trim(),
+          color,
+          brushSize,
+        });
+      }
+      if (!isRemoteDrawRef.current) {
+        updateCurrentPageSnapshot(canvasRef.current.toDataURL());
+        saveState();
+      }
+    }
+    setShowTextInput(false);
+    setTextInput('');
+  };
+
+  const handleTextKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleTextSubmit();
+    } else if (e.key === 'Escape') {
+      setShowTextInput(false);
+      setTextInput('');
+    }
+  };
+
   useEffect(() => {
     const storedClassId = localStorage.getItem("classId") || "default-class";
     let storedUserId = localStorage.getItem("userId");
@@ -1206,6 +1307,22 @@ export default function CanvasBoard({
     socket.on("receive-text", (data) => {
       isRemoteDrawRef.current = true;
       drawText(data.x, data.y, data.text, data.color, data.brushSize);
+      isRemoteDrawRef.current = false;
+    });
+
+    socket.on("receive-bucket-fill", (data) => {
+      isRemoteDrawRef.current = true;
+      floodFill(data.x, data.y, data.color);
+      isRemoteDrawRef.current = false;
+    });
+
+    socket.on("receive-fill-area", (data) => {
+      isRemoteDrawRef.current = true;
+      const ctx = canvasRef.current?.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = data.color;
+        ctx.fillRect(data.x, data.y, data.width, data.height);
+      }
       isRemoteDrawRef.current = false;
     });
 
@@ -1290,6 +1407,10 @@ export default function CanvasBoard({
   }, []);
 
   useEffect(() => {
+    setSelectedArea(null);
+  }, [tool]);
+
+  useEffect(() => {
     if (cameraOn && localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
     }
@@ -1299,7 +1420,7 @@ export default function CanvasBoard({
     if (!classId || !userId || classUsers.length === 0) return;
 
     classUsers.forEach((user) => {
-      if (user.userId !== userId && user.cameraOn) {
+      if (user.userId !== userId) {
         createOffer(user.userId);
       }
     });
@@ -1418,28 +1539,60 @@ export default function CanvasBoard({
     const y = e.nativeEvent.offsetY;
 
     if (tool === "text") {
-      const text = window.prompt("Enter text");
+      setTextSelecting(true);
+      setStartX(x);
+      setStartY(y);
+      setTextPosition({x, y, width: 100, height: 20});
+      setDrawing(true);
+      return;
+    }
 
-      if (text && text.trim()) {
-        drawText(x, y, text.trim(), color, brushSize);
+    if (tool === "select") {
+      setStartX(x);
+      setStartY(y);
+      setDrawing(true);
+      return;
+    }
 
-        if (classId) {
-          socket.emit("draw-text", {
-            classId,
-            x,
-            y,
-            text: text.trim(),
-            color,
-            brushSize,
-          });
-        }
-
-        if (!isRemoteDrawRef.current) {
-          updateCurrentPageSnapshot(canvasRef.current.toDataURL());
-          saveState();
+    if (tool === "fill") {
+      if (selectedArea) {
+        const ctx = canvasRef.current?.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = color;
+          ctx.fillRect(selectedArea.x, selectedArea.y, selectedArea.width, selectedArea.height);
+          if (classId) {
+            socket.emit("fill-area", {
+              classId,
+              x: selectedArea.x,
+              y: selectedArea.y,
+              width: selectedArea.width,
+              height: selectedArea.height,
+              color,
+            });
+          }
+          if (!isRemoteDrawRef.current) {
+            updateCurrentPageSnapshot(canvasRef.current.toDataURL());
+            saveState();
+          }
         }
       }
+      return;
+    }
 
+    if (tool === "bucket") {
+      floodFill(x, y, color);
+      if (classId) {
+        socket.emit("bucket-fill", {
+          classId,
+          x,
+          y,
+          color,
+        });
+      }
+      if (!isRemoteDrawRef.current) {
+        updateCurrentPageSnapshot(canvasRef.current.toDataURL());
+        saveState();
+      }
       return;
     }
 
@@ -1494,6 +1647,21 @@ export default function CanvasBoard({
 
       lastLocalPointRef.current = { x, y };
     }
+
+    if (tool === "text" && textSelecting) {
+      const width = Math.abs(x - startX);
+      const height = Math.abs(y - startY);
+      setTextPosition({
+        x: Math.min(startX, x),
+        y: Math.min(startY, y),
+        width: Math.max(width, 50),
+        height: Math.max(height, 20)
+      });
+    }
+
+    if (tool === "select" && drawing) {
+      // Preview selection rectangle - we'll draw it in a separate effect or in render
+    }
   };
 
   const stopDrawing = (e) => {
@@ -1531,6 +1699,32 @@ export default function CanvasBoard({
           color,
           brushSize,
         });
+      }
+    }
+
+    if (tool === "text" && textSelecting) {
+      setTextSelecting(false);
+      setShowTextInput(true);
+      setTextInput('');
+      setTimeout(() => {
+        if (textInputRef.current) {
+          textInputRef.current.focus();
+        }
+      }, 0);
+    }
+
+    if (tool === "select") {
+      const width = Math.abs(x - startX);
+      const height = Math.abs(y - startY);
+      if (width > 5 && height > 5) {
+        setSelectedArea({
+          x: Math.min(startX, x),
+          y: Math.min(startY, y),
+          width,
+          height
+        });
+      } else {
+        setSelectedArea(null);
       }
     }
 
@@ -1853,6 +2047,12 @@ export default function CanvasBoard({
       ? "crosshair"
       : tool === "text"
       ? "text"
+      : tool === "select"
+      ? "crosshair"
+      : tool === "fill"
+      ? "pointer"
+      : tool === "bucket"
+      ? "copy"
       : "default"
     : "not-allowed";
 
@@ -1925,7 +2125,7 @@ export default function CanvasBoard({
 
       <div className="flex-1 flex overflow-hidden p-4 gap-4">
         <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm overflow-hidden">
-          <div ref={canvasContainerRef} className="flex-1 overflow-hidden bg-white">
+          <div ref={canvasContainerRef} className="flex-1 overflow-hidden bg-white relative">
             <canvas
               ref={canvasRef}
               width={canvasSize.width}
@@ -1943,6 +2143,45 @@ export default function CanvasBoard({
               onPointerLeave={stopDrawing}
               onPointerCancel={stopDrawing}
             />
+            {selectedArea && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${(selectedArea.x / canvasSize.width) * 100}%`,
+                  top: `${(selectedArea.y / canvasSize.height) * 100}%`,
+                  width: `${(selectedArea.width / canvasSize.width) * 100}%`,
+                  height: `${(selectedArea.height / canvasSize.height) * 100}%`,
+                  border: '2px dashed #007bff',
+                  backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+            {showTextInput && (
+              <textarea
+                ref={textInputRef}
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={handleTextKeyDown}
+                onBlur={handleTextSubmit}
+                style={{
+                  position: 'absolute',
+                  left: `${(textPosition.x / canvasSize.width) * 100}%`,
+                  top: `${(textPosition.y / canvasSize.height) * 100}%`,
+                  width: `${(textPosition.width / canvasSize.width) * 100}%`,
+                  height: `${(textPosition.height / canvasSize.height) * 100}%`,
+                  fontSize: `${Math.max(12, brushSize * 2)}px`,
+                  color: color,
+                  backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                  border: '1px solid #ccc',
+                  resize: 'none',
+                  outline: 'none',
+                  padding: '2px',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+                placeholder="Type text here..."
+              />
+            )}
           </div>
 
           <div className="bg-gray-50 border-t p-3 flex flex-wrap gap-2 justify-center">
@@ -1971,14 +2210,14 @@ export default function CanvasBoard({
               onClick={downloadBoard}
               className="px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
             >
-              💾 Download
+              💾 Page Download
             </button>
 
             <button
               onClick={downloadAllPagesAsPdf}
               className="px-3 py-2 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700"
             >
-              📄 PDF
+              📄 Complete Notes
             </button>
 
             <button
@@ -2229,68 +2468,74 @@ export default function CanvasBoard({
 
           <div className="bg-white rounded-xl shadow-sm p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">
-              Video Call
+              Video Call ({classUsers.filter(u => u.cameraOn).length} active)
             </h3>
 
             <div className="space-y-4">
-              {cameraOn && (
-                <div className="aspect-video bg-black rounded-lg overflow-hidden relative">
-                  <video
-                    ref={localVideoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-
-                  <div className="absolute bottom-2 left-2 bg-black bg-opacity-60 px-2 py-1 rounded text-xs text-white">
-                    {userName} (You)
+              {/* Video Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {/* Local Video */}
+                {cameraOn && (
+                  <div className="aspect-video bg-black rounded-lg overflow-hidden relative">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-2 left-2 bg-black bg-opacity-60 px-2 py-1 rounded text-xs text-white">
+                      {userName} (You)
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!cameraOn && (
-                <div className="aspect-video bg-gray-200 rounded-lg flex items-center justify-center">
-                  <p className="text-sm text-gray-500">Your camera is off</p>
-                </div>
-              )}
+                {/* Remote Videos */}
+                {Array.from(remoteStreams.entries()).map(([remoteUserId]) => {
+                  const remoteUser = classUsers.find(
+                    (u) => u.userId === remoteUserId
+                  );
 
-              {remoteStreams.size > 0 && (
-                <div className="grid grid-cols-1 gap-2">
-                  {Array.from(remoteStreams.entries()).map(([remoteUserId]) => {
-                    const remoteUser = classUsers.find(
-                      (u) => u.userId === remoteUserId
-                    );
-                    const videoRef = remoteVideoRefs.current.get(remoteUserId);
+                  // Only show if remote user has camera on
+                  if (!remoteUser?.cameraOn) return null;
 
-                    return (
-                      <div
-                        key={remoteUserId}
-                        className="aspect-video bg-black rounded-lg overflow-hidden relative"
-                      >
-                        {videoRef && (
-                          <video
-                            ref={(el) => {
-                              if (el && videoRef) {
-                                el.srcObject = videoRef.srcObject;
-                              }
-                            }}
-                            autoPlay
-                            playsInline
-                            className="w-full h-full object-cover"
-                          />
-                        )}
+                  const videoRef = remoteVideoRefs.current.get(remoteUserId);
 
-                        <div className="absolute bottom-2 left-2 bg-black bg-opacity-60 px-2 py-1 rounded text-xs text-white">
-                          {remoteUser?.userName || remoteUserId}
-                        </div>
+                  return (
+                    <div
+                      key={remoteUserId}
+                      className="aspect-video bg-black rounded-lg overflow-hidden relative"
+                    >
+                      {videoRef && (
+                        <video
+                          ref={(el) => {
+                            if (el && videoRef) {
+                              el.srcObject = videoRef.srcObject;
+                            }
+                          }}
+                          autoPlay
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      <div className="absolute bottom-2 left-2 bg-black bg-opacity-60 px-2 py-1 rounded text-xs text-white">
+                        {remoteUser?.userName || remoteUserId}
                       </div>
-                    );
-                  })}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Status Messages */}
+              {!cameraOn && remoteStreams.size === 0 && (
+                <div className="text-center py-4">
+                  <p className="text-xs text-gray-500">
+                    Turn on your camera to join the video call
+                  </p>
                 </div>
               )}
 
-              {remoteStreams.size === 0 && cameraOn && (
+              {cameraOn && remoteStreams.size === 0 && (
                 <div className="text-center py-4">
                   <p className="text-xs text-gray-500">
                     Waiting for other users to turn on camera...

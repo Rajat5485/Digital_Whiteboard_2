@@ -544,6 +544,55 @@ const initializeSocket = (io) => {
       socket.to(classId).emit("receive-draw", data);
     });
 
+    /* TEXT DRAW EVENT */
+    socket.on("draw-text", ({ classId, x, y, text, color, brushSize }) => {
+      const current = classSessions[classId]?.[socket.id];
+      if (!current || (!current.canDraw && current.role !== "teacher")) {
+        socket.emit("draw-not-allowed");
+        return;
+      }
+
+      socket.to(classId).emit("receive-text", {
+        x,
+        y,
+        text,
+        color,
+        brushSize,
+      });
+    });
+
+    /* BUCKET FILL EVENT */
+    socket.on("bucket-fill", ({ classId, x, y, color }) => {
+      const current = classSessions[classId]?.[socket.id];
+      if (!current || (!current.canDraw && current.role !== "teacher")) {
+        socket.emit("draw-not-allowed");
+        return;
+      }
+
+      socket.to(classId).emit("receive-bucket-fill", {
+        x,
+        y,
+        color,
+      });
+    });
+
+    /* FILL AREA EVENT */
+    socket.on("fill-area", ({ classId, x, y, width, height, color }) => {
+      const current = classSessions[classId]?.[socket.id];
+      if (!current || (!current.canDraw && current.role !== "teacher")) {
+        socket.emit("draw-not-allowed");
+        return;
+      }
+
+      socket.to(classId).emit("receive-fill-area", {
+        x,
+        y,
+        width,
+        height,
+        color,
+      });
+    });
+
     /* CLEAR */
     socket.on("clear-board", (classId) => {
       const current = classSessions[classId]?.[socket.id];
