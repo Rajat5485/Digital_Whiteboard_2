@@ -3,12 +3,11 @@ import mongoose from "mongoose";
 const noteSchema = new mongoose.Schema(
   {
     classId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Classroom",
+      type: String,
       required: true
     },
     teacher: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       ref: "User",
       required: true
     },
@@ -17,7 +16,7 @@ const noteSchema = new mongoose.Schema(
       required: true
     },
     recipients: [{
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       ref: "User"
     }],
     sent: {

@@ -7,7 +7,9 @@ const tools = [
   { id: "rectangle", label: "Rectangle" },
   { id: "fill-rectangle", label: "Fill Rect" },
   { id: "circle", label: "Circle" },
+  { id: "fill-circle", label: "Fill Circle" },
   { id: "triangle", label: "Triangle" },
+  { id: "fill-triangle", label: "Fill Triangle" },
   { id: "line", label: "Line" },
   { id: "arrow", label: "Arrow" },
 ];

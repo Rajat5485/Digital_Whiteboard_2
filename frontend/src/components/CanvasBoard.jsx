@@ -745,28 +745,6 @@
 //     setSelectedStudents([]);
 //   };
 
-//   const updateMediaStream = async (nextMic, nextCamera) => {
-//     try {
-//       if (nextMic || nextCamera) {
-//         const stream = await navigator.mediaDevices.getUserMedia({
-//           audio: nextMic,
-//           video: nextCamera,
-//         });
-//         if (mediaStreamRef.current) {
-//           mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-//         }
-//         mediaStreamRef.current = stream;
-//       } else if (mediaStreamRef.current) {
-//         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-//         mediaStreamRef.current = null;
-//       }
-//     } catch (error) {
-//       console.warn("Media access failed", error);
-//       updateNotifications("Unable to access microphone or camera.");
-//       setMicOn(false);
-//       setCameraOn(false);
-//     }
-//   };
 
 //   const toggleMic = async () => {
 //     const next = !micOn;
@@ -990,7 +968,7 @@ export default function CanvasBoard({
   const canvasRef = useRef(null);
   const canvasContainerRef = useRef(null);
   const lastLocalPointRef = useRef({ x: null, y: null });
-  const mediaStreamRef = useRef(null);
+  const activePointerIdRef = useRef(null);
 
   const [drawing, setDrawing] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -1013,6 +991,7 @@ export default function CanvasBoard({
   const [notifications, setNotifications] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [teacherNotes, setTeacherNotes] = useState([]);
+  const [mediaStream, setMediaStream] = useState(null);
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -1025,7 +1004,7 @@ export default function CanvasBoard({
     classId,
     userId,
     userName,
-    mediaStreamRef.current
+    mediaStream
   );
 
   const updateNotifications = (message) => {
@@ -1121,13 +1100,16 @@ export default function CanvasBoard({
     } else if (shapeType === "fill-rectangle") {
       ctx.fillRect(shapeStartX, shapeStartY, endX - shapeStartX, endY - shapeStartY);
       ctx.strokeRect(shapeStartX, shapeStartY, endX - shapeStartX, endY - shapeStartY);
-    } else if (shapeType === "circle") {
+    } else if (shapeType === "circle" || shapeType === "fill-circle") {
       const radius = Math.sqrt(
         Math.pow(endX - shapeStartX, 2) + Math.pow(endY - shapeStartY, 2)
       );
 
       ctx.beginPath();
       ctx.arc(shapeStartX, shapeStartY, radius, 0, 2 * Math.PI);
+      if (shapeType === "fill-circle") {
+        ctx.fill();
+      }
       ctx.stroke();
     } else if (shapeType === "line" || shapeType === "arrow") {
       ctx.beginPath();
@@ -1152,12 +1134,15 @@ export default function CanvasBoard({
         );
         ctx.stroke();
       }
-    } else if (shapeType === "triangle") {
+    } else if (shapeType === "triangle" || shapeType === "fill-triangle") {
       ctx.beginPath();
       ctx.moveTo(shapeStartX, endY);
       ctx.lineTo((shapeStartX + endX) / 2, shapeStartY);
       ctx.lineTo(endX, endY);
       ctx.closePath();
+      if (shapeType === "fill-triangle") {
+        ctx.fill();
+      }
       ctx.stroke();
     }
 
@@ -1305,10 +1290,10 @@ export default function CanvasBoard({
   }, []);
 
   useEffect(() => {
-    if (localStream && localVideoRef.current) {
+    if (cameraOn && localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
     }
-  }, [localStream]);
+  }, [localStream, cameraOn]);
 
   useEffect(() => {
     if (!classId || !userId || classUsers.length === 0) return;
@@ -1421,6 +1406,14 @@ export default function CanvasBoard({
       return;
     }
 
+    const pointerId = e.nativeEvent.pointerId;
+    if (canvasRef.current && pointerId != null) {
+      if (canvasRef.current.setPointerCapture) {
+        canvasRef.current.setPointerCapture(pointerId);
+      }
+      activePointerIdRef.current = pointerId;
+    }
+
     const x = e.nativeEvent.offsetX;
     const y = e.nativeEvent.offsetY;
 
@@ -1506,6 +1499,12 @@ export default function CanvasBoard({
   const stopDrawing = (e) => {
     if (!drawing) return;
 
+    const pointerId = e.nativeEvent.pointerId ?? activePointerIdRef.current;
+    if (canvasRef.current && pointerId != null && canvasRef.current.hasPointerCapture?.(pointerId)) {
+      canvasRef.current.releasePointerCapture(pointerId);
+    }
+    activePointerIdRef.current = null;
+
     const x = e.nativeEvent.offsetX;
     const y = e.nativeEvent.offsetY;
 
@@ -1513,7 +1512,9 @@ export default function CanvasBoard({
       tool === "rectangle" ||
       tool === "fill-rectangle" ||
       tool === "circle" ||
+      tool === "fill-circle" ||
       tool === "triangle" ||
+      tool === "fill-triangle" ||
       tool === "line" ||
       tool === "arrow"
     ) {
@@ -1777,53 +1778,62 @@ export default function CanvasBoard({
           video: nextCamera,
         });
 
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
         }
 
-        mediaStreamRef.current = stream;
-      } else if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-        mediaStreamRef.current = null;
+        setMediaStream(stream);
+        return true;
+      } else if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        setMediaStream(null);
+        return true;
       }
+
+      return true;
     } catch (error) {
       console.warn("Media access failed", error);
       updateNotifications("Unable to access microphone or camera.");
       setMicOn(false);
       setCameraOn(false);
+      return false;
     }
   };
 
   const toggleMic = async () => {
     const next = !micOn;
 
-    setMicOn(next);
+    const success = await updateMediaStream(next, cameraOn);
 
-    if (classId) {
-      socket.emit("media-state", {
-        classId,
-        micOn: next,
-        cameraOn,
-      });
+    if (success) {
+      setMicOn(next);
+
+      if (classId) {
+        socket.emit("media-state", {
+          classId,
+          micOn: next,
+          cameraOn,
+        });
+      }
     }
-
-    await updateMediaStream(next, cameraOn);
   };
 
   const toggleCamera = async () => {
     const next = !cameraOn;
 
-    setCameraOn(next);
+    const success = await updateMediaStream(micOn, next);
 
-    if (classId) {
-      socket.emit("media-state", {
-        classId,
-        micOn,
-        cameraOn: next,
-      });
+    if (success) {
+      setCameraOn(next);
+
+      if (classId) {
+        socket.emit("media-state", {
+          classId,
+          micOn,
+          cameraOn: next,
+        });
+      }
     }
-
-    await updateMediaStream(micOn, next);
   };
 
   const cursorStyle = isAllowedToDraw
@@ -1834,6 +1844,12 @@ export default function CanvasBoard({
       : tool === "marker"
       ? "crosshair"
       : tool === "highlighter"
+      ? "crosshair"
+      : tool === "fill-rectangle"
+      ? "crosshair"
+      : tool === "fill-circle"
+      ? "crosshair"
+      : tool === "fill-triangle"
       ? "crosshair"
       : tool === "text"
       ? "text"
@@ -1921,10 +1937,11 @@ export default function CanvasBoard({
                 display: "block",
               }}
               className="bg-white"
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
+              onPointerDown={startDrawing}
+              onPointerMove={draw}
+              onPointerUp={stopDrawing}
+              onPointerLeave={stopDrawing}
+              onPointerCancel={stopDrawing}
             />
           </div>
 
