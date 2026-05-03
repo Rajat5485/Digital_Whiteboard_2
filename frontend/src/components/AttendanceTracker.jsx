@@ -15,7 +15,7 @@ const AttendanceTracker = () => {
   const updateRef = useRef(null);
   const minimumTimeRequired = 600; // 10 minutes in seconds
   const token = localStorage.getItem("token");
-  const API_URL = `${import.meta.env.VITE_API_URL}/api` || "const API = import.meta.env.VITE_API_URL;/api";
+  const API_URL = `${import.meta.env.VITE_API_URL || "https://digital-whiteboard-2-1.onrender.com"}/api` || "const API = import.meta.env.VITE_API_URL;/api";
 
   useEffect(() => {
     const handleVisibilityChange = () => {

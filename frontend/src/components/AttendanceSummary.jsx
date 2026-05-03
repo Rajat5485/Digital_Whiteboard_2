@@ -11,7 +11,7 @@ const AttendanceSummary = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const token = localStorage.getItem("token");
-  const API_URL = `${import.meta.env.VITE_API_URL}/api` || "const API = import.meta.env.VITE_API_URL;/api";
+  const API_URL = `${import.meta.env.VITE_API_URL || "https://digital-whiteboard-2-1.onrender.com"}/api` || "const API = import.meta.env.VITE_API_URL;/api";
 
   useEffect(() => {
     fetchAttendance();

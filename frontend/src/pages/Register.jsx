@@ -18,7 +18,7 @@ export default function Register() {
 
     try {
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/register`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "https://digital-whiteboard-2-1.onrender.com"}/api/auth/register`, {
 
         method: "POST",
 
