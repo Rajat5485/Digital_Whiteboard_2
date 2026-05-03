@@ -1,5 +1,5 @@
 import { useState } from "react";
-import CanvasBoard from "../components/CanvasBoard";
+import CanvasBoardContainer from "../components/Canvasboardcontainer";
 import Toolbar from "../components/Toolbar";
 import AIChat from "../components/AIChat";
 import { useNavigate } from "react-router-dom";
@@ -50,7 +50,7 @@ export default function Whiteboard() {
           </div>
 
           <div className="flex-1 p-4">
-            <CanvasBoard
+            <CanvasBoardContainer
               color={color}
               tool={tool}
               brushSize={brushSize}
