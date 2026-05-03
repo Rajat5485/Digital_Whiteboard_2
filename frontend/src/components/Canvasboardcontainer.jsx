@@ -40,20 +40,63 @@ export default function CanvasBoardContainer({ color, tool, brushSize }) {
   } = useCanvas({ classId, color, tool, brushSize, isAllowedToDraw });
 
   // ─── Share Helpers ───────────────────────────────────────────────────────────
-  const sendPdfToWhatsApp = () => {
+  const sendPdfToWhatsApp = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const pdf = new jsPDF({
-      orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
-      unit: "px",
-      format: [canvas.width, canvas.height],
-    });
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height);
-    pdf.save("whiteboard-notes.pdf");
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent("PDF downloaded. Please attach 'whiteboard-notes.pdf' and send it.")}`,
-      "_blank"
-    );
+
+    try {
+      // 1. Generate PDF from all pages (similar to downloadAllPagesAsPdf)
+      const currentSnapshot = canvas.toDataURL("image/png");
+      const snapshots = pages
+        .map((page, i) => (i === currentPage ? currentSnapshot : page.snapshot))
+        .filter(Boolean);
+
+      if (snapshots.length === 0) {
+        alert("No notes available to share.");
+        return;
+      }
+
+      const pdf = new jsPDF({
+        orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+
+      snapshots.forEach((snapshot, i) => {
+        if (i !== 0) {
+          pdf.addPage(
+            [canvas.width, canvas.height],
+            canvas.width >= canvas.height ? "landscape" : "portrait"
+          );
+        }
+        pdf.addImage(snapshot, "PNG", 0, 0, canvas.width, canvas.height, undefined, "FAST");
+      });
+
+      // 2. Create a File object from the PDF
+      const pdfBlob = pdf.output("blob");
+      const pdfFile = new File([pdfBlob], "whiteboard-notes.pdf", { type: "application/pdf" });
+
+      // 3. Try Web Share API (Best for Mobile & Modern Browsers)
+      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        await navigator.share({
+          files: [pdfFile],
+          title: "Whiteboard Notes",
+          text: "Here are the notes from today's class!",
+        });
+        console.log("Notes shared successfully via Web Share API");
+      } else {
+        // 4. Fallback for Desktop/Unsupported Browsers
+        pdf.save("whiteboard-notes.pdf");
+        alert("PDF generated and downloaded! \n\nDirect file sharing is not supported by your browser. Please attach the downloaded 'whiteboard-notes.pdf' manually in the WhatsApp window that opens next.");
+        
+        const waMessage = encodeURIComponent("I'm sharing my whiteboard notes with you. (Please attach the 'whiteboard-notes.pdf' file you just downloaded)");
+        window.open(`https://wa.me/?text=${waMessage}`, "_blank");
+      }
+    } catch (err) {
+      console.error("WhatsApp share failed:", err);
+      // Final fallback
+      alert("Sharing failed. Please use the 'Download PDF' button instead.");
+    }
   };
 
   const sendLinkToWhatsApp = () => {
