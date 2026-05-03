@@ -212,6 +212,38 @@ const initializeSocket = (io) => {
       });
     });
 
+    /* WebRTC Signaling */
+    socket.on("webrtc-offer", ({ classId, to, offer }) => {
+      // Find the target socketId by userId
+      const targetUser = Object.values(classSessions[classId] || {}).find(u => u.userId === to);
+      if (targetUser) {
+        io.to(targetUser.socketId).emit("webrtc-offer", { from: socket.data.userId, offer });
+      }
+    });
+
+    socket.on("webrtc-answer", ({ classId, to, answer }) => {
+      const targetUser = Object.values(classSessions[classId] || {}).find(u => u.userId === to);
+      if (targetUser) {
+        io.to(targetUser.socketId).emit("webrtc-answer", { from: socket.data.userId, answer });
+      }
+    });
+
+    socket.on("ice-candidate", ({ classId, to, candidate }) => {
+      const targetUser = Object.values(classSessions[classId] || {}).find(u => u.userId === to);
+      if (targetUser) {
+        io.to(targetUser.socketId).emit("ice-candidate", { from: socket.data.userId, candidate });
+      }
+    });
+
+    socket.on("media-state", ({ classId, micOn, cameraOn }) => {
+      const user = classSessions[classId]?.[socket.id];
+      if (user) {
+        user.micOn = micOn;
+        user.cameraOn = cameraOn;
+        broadcastUserList(io, classId);
+      }
+    });
+
     /* DISCONNECT */
     socket.on("disconnect", () => {
       const { classId } = socket.data || {};
