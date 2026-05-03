@@ -46,12 +46,7 @@ export default function Whiteboard() {
               <h1 className="text-xl font-semibold text-gray-900">Digital Whiteboard</h1>
               <p className="text-sm text-gray-500">Collaborative drawing and learning</p>
             </div>
-            <button
-              onClick={() => navigate("/attendance")}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              View Attendance
-            </button>
+           
           </div>
 
           <div className="flex-1 p-4">
