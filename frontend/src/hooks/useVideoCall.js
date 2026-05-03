@@ -12,12 +12,16 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
   const pendingCandidates = useRef(new Map());
 
   const ICE_SERVERS = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ],
   };
 
   const updateMediaStream = useCallback(async (nextMic, nextCamera) => {
     try {
       if (nextMic || nextCamera) {
+        console.log(`[VideoCall] Requesting media: mic=${nextMic}, cam=${nextCamera}`);
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: nextMic,
           video: nextCamera,
@@ -28,6 +32,7 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
         });
         return stream;
       } else {
+        console.log("[VideoCall] Stopping all media tracks");
         setMediaStream((prev) => {
           if (prev) prev.getTracks().forEach((t) => t.stop());
           return null;
@@ -35,7 +40,7 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
         return null;
       }
     } catch (err) {
-      console.warn("Media access failed", err);
+      console.warn("[VideoCall] Media access failed", err);
       return null;
     }
   }, []);
@@ -46,6 +51,7 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
         return peerConnections.current.get(remoteUserId);
       }
 
+      console.log(`[VideoCall] Creating RTCPeerConnection for user: ${remoteUserId}`);
       const pc = new RTCPeerConnection(ICE_SERVERS);
 
       pc.onicecandidate = (event) => {
@@ -59,11 +65,31 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
       };
 
       pc.ontrack = (event) => {
+        console.log(`[VideoCall] Received remote track from ${remoteUserId}:`, event.track.kind);
         setRemoteStreams((prev) => {
           const updated = new Map(prev);
           updated.set(remoteUserId, event.streams[0]);
           return updated;
         });
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[VideoCall] Connection state with ${remoteUserId}: ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+          // Optional: handle cleanup or retry
+        }
+      };
+
+      // Renegotiation handling
+      pc.onnegotiationneeded = async () => {
+        try {
+          console.log(`[VideoCall] Negotiation needed for ${remoteUserId}`);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit("webrtc-offer", { classId, to: remoteUserId, offer });
+        } catch (err) {
+          console.error("[VideoCall] Renegotiation failed", err);
+        }
       };
 
       if (mediaStream) {
@@ -79,12 +105,13 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
   const createOffer = useCallback(
     async (remoteUserId) => {
       try {
+        console.log(`[VideoCall] Initiating offer to ${remoteUserId}`);
         const pc = createPeerConnection(remoteUserId);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit("webrtc-offer", { classId, to: remoteUserId, offer });
       } catch (err) {
-        console.error("Offer creation failed", err);
+        console.error("[VideoCall] Offer creation failed", err);
       }
     },
     [classId, createPeerConnection]
@@ -93,12 +120,14 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
   useEffect(() => {
     const handleOffer = async ({ from, offer }) => {
       try {
+        console.log(`[VideoCall] Received offer from ${from}`);
         const pc = createPeerConnection(from);
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         
         // Add any pending candidates
         if (pendingCandidates.current.has(from)) {
           const candidates = pendingCandidates.current.get(from);
+          console.log(`[VideoCall] Draining ${candidates.length} pending candidates for ${from}`);
           for (const cand of candidates) await pc.addIceCandidate(new RTCIceCandidate(cand));
           pendingCandidates.current.delete(from);
         }
@@ -107,16 +136,27 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
         await pc.setLocalDescription(answer);
         socket.emit("webrtc-answer", { classId, to: from, answer });
       } catch (err) {
-        console.error("Handle offer failed", err);
+        console.error("[VideoCall] Handle offer failed", err);
       }
     };
 
     const handleAnswer = async ({ from, answer }) => {
       try {
+        console.log(`[VideoCall] Received answer from ${from}`);
         const pc = peerConnections.current.get(from);
-        if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        if (pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          
+          // Drain pending candidates after setting remote description
+          if (pendingCandidates.current.has(from)) {
+            const candidates = pendingCandidates.current.get(from);
+            console.log(`[VideoCall] Draining ${candidates.length} pending candidates for ${from}`);
+            for (const cand of candidates) await pc.addIceCandidate(new RTCIceCandidate(cand));
+            pendingCandidates.current.delete(from);
+          }
+        }
       } catch (err) {
-        console.error("Handle answer failed", err);
+        console.error("[VideoCall] Handle answer failed", err);
       }
     };
 
@@ -130,7 +170,7 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
           pendingCandidates.current.get(from).push(candidate);
         }
       } catch (err) {
-        console.error("Handle ICE candidate failed", err);
+        console.error("[VideoCall] Handle ICE candidate failed", err);
       }
     };
 
@@ -153,8 +193,10 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
         mediaStream.getTracks().forEach((track) => {
           const sender = senders.find((s) => s.track && s.track.kind === track.kind);
           if (sender) {
+            console.log(`[VideoCall] Replacing ${track.kind} track`);
             sender.replaceTrack(track);
           } else {
+            console.log(`[VideoCall] Adding ${track.kind} track`);
             pc.addTrack(track, mediaStream);
           }
         });
@@ -168,26 +210,59 @@ export default function useVideoCall({ classId, userId, userName, classUsers }) 
     }
   }, [mediaStream, cameraOn]);
 
-  // Initiate calls to others (only if my userId is smaller to avoid glare)
+  // Cleanup disconnected peers
   useEffect(() => {
-    if (!classId || !userId || classUsers.length === 0) return;
-    classUsers.forEach((user) => {
-      if (user.userId !== userId && userId < user.userId) {
-        createOffer(user.userId);
+    const currentRemoteUserIds = new Set(classUsers.map((u) => u.userId));
+    
+    // Cleanup PeerConnections
+    peerConnections.current.forEach((pc, rId) => {
+      if (!currentRemoteUserIds.has(rId)) {
+        console.log(`[VideoCall] Cleaning up connection for user: ${rId}`);
+        pc.close();
+        peerConnections.current.delete(rId);
+        pendingCandidates.current.delete(rId);
       }
     });
-  }, [classUsers.length, classId, userId, createOffer]);
+
+    // Cleanup Remote Streams
+    setRemoteStreams((prev) => {
+      const updated = new Map(prev);
+      let changed = false;
+      updated.forEach((_, rId) => {
+        if (!currentRemoteUserIds.has(rId)) {
+          updated.delete(rId);
+          changed = true;
+        }
+      });
+      return changed ? updated : prev;
+    });
+  }, [classUsers, userId]);
+
+  // Initiate calls to others
+  useEffect(() => {
+    if (!classId || !userId || classUsers.length === 0) return;
+    
+    classUsers.forEach((user) => {
+      // Avoid calling ourselves and ensure only one peer initiates (smaller ID calls larger ID)
+      if (user.userId !== userId && userId < user.userId) {
+        // Only initiate if connection doesn't exist
+        if (!peerConnections.current.has(user.userId)) {
+          createOffer(user.userId);
+        }
+      }
+    });
+  }, [classUsers, classId, userId, createOffer]);
 
   const toggleMic = useCallback(async () => {
     const next = !micOn;
-    const stream = await updateMediaStream(next, cameraOn);
+    await updateMediaStream(next, cameraOn);
     setMicOn(next);
     if (classId) socket.emit("media-state", { classId, micOn: next, cameraOn });
   }, [micOn, cameraOn, classId, updateMediaStream]);
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraOn;
-    const stream = await updateMediaStream(micOn, next);
+    await updateMediaStream(micOn, next);
     setCameraOn(next);
     if (classId) socket.emit("media-state", { classId, micOn, cameraOn: next });
   }, [micOn, cameraOn, classId, updateMediaStream]);
