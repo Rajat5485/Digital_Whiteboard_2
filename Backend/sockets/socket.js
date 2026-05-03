@@ -153,6 +153,61 @@ const initializeSocket = (io) => {
       io.to(classId).emit("class-ended");
     });
 
+    /* TOGGLE DRAW PERMISSION */
+    socket.on("toggle-draw-permission", ({ classId, targetSocketId, allowed }) => {
+      const user = classSessions[classId]?.[socket.id];
+      if (!user || user.role !== "teacher") return;
+
+      if (classSessions[classId][targetSocketId]) {
+        classSessions[classId][targetSocketId].canDraw = allowed;
+        io.to(targetSocketId).emit("draw-permission-changed", { allowed });
+        io.to(classId).emit("permission-updated", {
+          userName: classSessions[classId][targetSocketId].userName,
+          allowed,
+        });
+        broadcastUserList(io, classId);
+      }
+    });
+
+    /* RAISE HAND */
+    socket.on("raise-hand", ({ classId, raised }) => {
+      const user = classSessions[classId]?.[socket.id];
+      if (!user) return;
+
+      user.handRaised = raised;
+      io.to(classId).emit("hand-raised-notification", {
+        userName: user.userName,
+        raised,
+      });
+      broadcastUserList(io, classId);
+    });
+
+    /* APPROVE ATTENDANCE */
+    socket.on("approve-attendance", ({ classId, targetSocketId }) => {
+      const user = classSessions[classId]?.[socket.id];
+      if (!user || user.role !== "teacher") return;
+
+      if (classSessions[classId][targetSocketId]) {
+        classSessions[classId][targetSocketId].attendanceApproved = true;
+        io.to(targetSocketId).emit("attendance-approved", {
+          message: "Your attendance has been approved by the teacher.",
+        });
+        broadcastUserList(io, classId);
+      }
+    });
+
+    /* SEND NOTES */
+    socket.on("send-notes-to-selected", ({ classId, notes, recipientUserIds }) => {
+      const user = classSessions[classId]?.[socket.id];
+      if (!user || user.role !== "teacher") return;
+
+      // Find socket IDs for the recipient user IDs
+      const recipients = Object.values(classSessions[classId]).filter(u => recipientUserIds.includes(u.userId));
+      recipients.forEach(r => {
+        io.to(r.socketId).emit("receive-notes", { from: user.userName, notes });
+      });
+    });
+
     /* DISCONNECT */
     socket.on("disconnect", () => {
       const { classId } = socket.data || {};
