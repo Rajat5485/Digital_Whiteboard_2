@@ -20,6 +20,11 @@ export default function useClassRoom() {
     setNotifications((prev) => [message, ...prev].slice(0, 8));
   }, []);
 
+  const handleLogout = useCallback(() => {
+    ["userId", "userName", "userRole", "classId"].forEach((k) => localStorage.removeItem(k));
+    window.location.href = "/";
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlClassId = params.get("classId");
@@ -137,11 +142,6 @@ export default function useClassRoom() {
       socket.emit("end-class", classId);
     }
   }, [classId, isTeacher]);
-
-  const handleLogout = useCallback(() => {
-    ["userId", "userName", "userRole", "classId"].forEach((k) => localStorage.removeItem(k));
-    window.location.href = "/";
-  }, []);
 
   return {
     classId, userId, userName, userRole, isTeacher, isAllowedToDraw,
