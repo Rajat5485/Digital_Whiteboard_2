@@ -209,7 +209,7 @@ db.attendances.updateMany(
 After setup, verify with:
 ```bash
 # Check backend is working
-curl http://localhost:5000/api/attendance/my-attendance \
+curl const API = import.meta.env.VITE_API_URL;/api/attendance/my-attendance \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Expected response: 200 OK with attendance records
