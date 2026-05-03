@@ -23,7 +23,7 @@ export default function Dashboard() {
       }
 
       try {
-        const endpoint = role === "teacher" ? `${import.meta.env.VITE_API_URL || "https://digital-whiteboard-2-1.onrender.com"}/api/classrooms/teacher` : `${import.meta.env.VITE_API_URL || "https://digital-whiteboard-2-1.onrender.com"}/api/classrooms/student`;
+        const endpoint = role === "teacher" ? `${(import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL !== "undefined") ? import.meta.env.VITE_API_URL : "https://digital-whiteboard-2-1.onrender.com"}/api/classrooms/teacher` : `${(import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL !== "undefined") ? import.meta.env.VITE_API_URL : "https://digital-whiteboard-2-1.onrender.com"}/api/classrooms/student`;
         const res = await fetch(`${endpoint}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -67,7 +67,7 @@ export default function Dashboard() {
   const handleGenerateLink = async (classId) => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "https://digital-whiteboard-2-1.onrender.com"}/api/classrooms/generate-link`, {
+      const res = await fetch(`${(import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL !== "undefined") ? import.meta.env.VITE_API_URL : "https://digital-whiteboard-2-1.onrender.com"}/api/classrooms/generate-link`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

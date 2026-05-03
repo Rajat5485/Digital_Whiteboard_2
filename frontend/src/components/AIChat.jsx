@@ -28,7 +28,7 @@ export default function AIChat() {
 
     try {
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "https://digital-whiteboard-2-1.onrender.com"}/api/ai/chat`, {
+      const res = await fetch(`${(import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL !== "undefined") ? import.meta.env.VITE_API_URL : "https://digital-whiteboard-2-1.onrender.com"}/api/ai/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
