@@ -18,7 +18,7 @@ export default function CanvasBoardContainer({ color, tool, brushSize }) {
     handRaised, classUsers, notifications, selectedStudents, teacherNotes,
     updateNotifications,
     startRaiseHand, handleToggleDrawPermission, handleApproveAttendance,
-    toggleSelectedStudent, handleSendNotes, handleLogout,
+    toggleSelectedStudent, handleSendNotes, handleLogout, handleEndClass,
   } = useClassRoom();
 
   // ─── Video call ──────────────────────────────────────────────────────────────
@@ -80,6 +80,7 @@ export default function CanvasBoardContainer({ color, tool, brushSize }) {
         onToggleCamera={toggleCamera}
         onRaiseHand={startRaiseHand}
         onSendNotes={handleSendNotes}
+        onEndClass={handleEndClass}
       />
 
       {/* Main Content */}

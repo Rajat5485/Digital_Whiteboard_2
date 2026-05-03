@@ -11,6 +11,7 @@ export default function ClassHeader({
   onToggleCamera,
   onRaiseHand,
   onSendNotes,
+  onEndClass,
 }) {
   return (
     <div className="bg-white border-b shadow-sm px-4 py-3 flex flex-wrap gap-3 items-center justify-between">
@@ -62,12 +63,20 @@ export default function ClassHeader({
         )}
 
         {isTeacher && (
-          <button
-            onClick={onSendNotes}
-            className="px-3 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            📝 Notes ({selectedStudents.length})
-          </button>
+          <>
+            <button
+              onClick={onSendNotes}
+              className="px-3 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              📝 Notes ({selectedStudents.length})
+            </button>
+            <button
+              onClick={onEndClass}
+              className="px-3 py-2 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+            >
+              🛑 End Class
+            </button>
+          </>
         )}
       </div>
     </div>

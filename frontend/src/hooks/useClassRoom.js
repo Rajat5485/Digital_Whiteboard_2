@@ -76,6 +76,10 @@ export default function useClassRoom() {
     socket.on("user-joined", ({ userName: joinedName }) => updateNotifications(`${joinedName} joined the class.`));
     socket.on("hand-raised-notification", ({ userName: studentName }) => updateNotifications(`${studentName} raised hand.`));
     socket.on("attendance-approved", ({ message }) => updateNotifications(message || "Attendance approved."));
+    socket.on("class-ended", () => {
+      alert("The teacher has ended the class session.");
+      handleLogout();
+    });
 
     return () => {
       socket.off("update-user-list");
@@ -87,8 +91,9 @@ export default function useClassRoom() {
       socket.off("user-joined");
       socket.off("hand-raised-notification");
       socket.off("attendance-approved");
+      socket.off("class-ended");
     };
-  }, [updateNotifications]);
+  }, [updateNotifications, handleLogout]);
 
   const startRaiseHand = useCallback(() => {
     const nextState = !handRaised;
@@ -126,6 +131,13 @@ export default function useClassRoom() {
     setSelectedStudents([]);
   }, [classId, selectedStudents, updateNotifications]);
 
+  const handleEndClass = useCallback(() => {
+    if (!classId || !isTeacher) return;
+    if (window.confirm("Are you sure you want to end the class? All board data will be deleted.")) {
+      socket.emit("end-class", classId);
+    }
+  }, [classId, isTeacher]);
+
   const handleLogout = useCallback(() => {
     ["userId", "userName", "userRole", "classId"].forEach((k) => localStorage.removeItem(k));
     window.location.href = "/";
@@ -136,6 +148,6 @@ export default function useClassRoom() {
     canDraw, handRaised, classUsers, notifications, selectedStudents,
     teacherNotes, updateNotifications,
     startRaiseHand, handleToggleDrawPermission, handleApproveAttendance,
-    toggleSelectedStudent, handleSendNotes, handleLogout,
+    toggleSelectedStudent, handleSendNotes, handleLogout, handleEndClass,
   };
 }

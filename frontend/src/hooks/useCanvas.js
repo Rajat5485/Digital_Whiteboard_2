@@ -207,6 +207,21 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
       canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
       saveState();
     });
+    socket.on("load-board", (strokes) => {
+      isRemoteDrawRef.current = true;
+      strokes.forEach((s) => {
+        if (s.type === "draw") drawLine(s.fromX, s.fromY, s.x, s.y, s.color, s.tool, s.brushSize);
+        else if (s.type === "shape") drawShape(s.startX, s.startY, s.endX, s.endY, s.tool, s.color, s.brushSize);
+        else if (s.type === "text") drawText(s.x, s.y, s.text, s.color, s.brushSize);
+        else if (s.type === "bucket-fill") floodFill(s.x, s.y, s.color);
+        else if (s.type === "fill-area") {
+          const ctx = canvasRef.current?.getContext("2d");
+          if (ctx) { ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.width, s.height); }
+        }
+      });
+      isRemoteDrawRef.current = false;
+      saveState();
+    });
     return () => {
       socket.off("receive-draw");
       socket.off("receive-shape");
@@ -214,6 +229,7 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
       socket.off("receive-bucket-fill");
       socket.off("receive-fill-area");
       socket.off("receive-clear");
+      socket.off("load-board");
     };
   }, [drawLine, drawShape, drawText, floodFill, saveState, saveStateWithDebounce]);
 

@@ -3,9 +3,9 @@ import mongoose from "mongoose";
 const boardSchema = new mongoose.Schema(
   {
     classId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Classroom",
-      required: true
+      type: String,
+      required: true,
+      index: true
     },
     strokes: {
       type: Array,
