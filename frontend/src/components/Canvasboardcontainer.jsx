@@ -101,9 +101,12 @@ export default function CanvasBoardContainer({ color, tool, brushSize }) {
 
   const sendLinkToWhatsApp = () => {
     // Share the base URL (login page) instead of the current board URL
-    const inviteUrl = `${window.location.origin}/?classId=${classId}`;
+    const inviteUrl = classId 
+      ? `${window.location.origin}/?classId=${classId}` 
+      : window.location.origin;
+
     window.open(
-      `https://wa.me/?text=${encodeURIComponent("Join my class here: " + inviteUrl)}`,
+      `https://wa.me/?text=${encodeURIComponent(inviteUrl)}`,
       "_blank"
     );
   };
