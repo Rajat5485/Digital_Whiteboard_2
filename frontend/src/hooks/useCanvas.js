@@ -8,6 +8,7 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
   const lastLocalPointRef = useRef({ x: null, y: null });
   const activePointerIdRef = useRef(null);
   const isRemoteDrawRef = useRef(false);
+  const allStrokesRef = useRef([]); // Store all strokes for all pages
 
   const [drawing, setDrawing] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -168,21 +169,27 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
   }, [saveState]);
 
   const redrawBoard = useCallback((strokes) => {
-    if (!strokes || !Array.isArray(strokes)) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !strokes) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     isRemoteDrawRef.current = true;
     strokes.forEach((s) => {
+      // Only draw if it belongs to the current page
+      if (s.pageIndex !== currentPage) return;
+
       if (s.type === "draw") drawLine(s.fromX, s.fromY, s.x, s.y, s.color, s.tool, s.brushSize);
       else if (s.type === "shape") drawShape(s.startX, s.startY, s.endX, s.endY, s.tool, s.color, s.brushSize);
       else if (s.type === "text") drawText(s.x, s.y, s.text, s.color, s.brushSize);
       else if (s.type === "bucket-fill") floodFill(s.x, s.y, s.color);
       else if (s.type === "fill-area") {
-        const ctx = canvasRef.current?.getContext("2d");
         if (ctx) { ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.width, s.height); }
       }
     });
     isRemoteDrawRef.current = false;
     saveState();
-  }, [drawLine, drawShape, drawText, floodFill, saveState]);
+  }, [drawLine, drawShape, drawText, floodFill, saveState, currentPage]);
 
   // ─── Initial Load from MongoDB ──────────────────────────────────────────────
 
@@ -202,6 +209,16 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
         if (res.ok) {
           const data = await res.json();
           if (data && data.strokes) {
+            allStrokesRef.current = data.strokes;
+            // Determine max page index
+            const maxPageIndex = data.strokes.reduce((max, s) => Math.max(max, s.pageIndex || 0), 0);
+            if (maxPageIndex >= pages.length) {
+              const newPages = [];
+              for (let i = 0; i <= maxPageIndex; i++) {
+                newPages.push({ id: i + 1, snapshot: null });
+              }
+              setPages(newPages);
+            }
             redrawBoard(data.strokes);
           }
         }
@@ -211,49 +228,68 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     };
 
     fetchBoard();
-  }, [classId, redrawBoard]);
+  }, [classId, redrawBoard, pages.length]);
 
   // ─── Socket Listeners ───────────────────────────────────────────────────────
 
   useEffect(() => {
     socket.on("receive-draw", (data) => {
-      isRemoteDrawRef.current = true;
-      drawLine(data.fromX, data.fromY, data.x, data.y, data.color, data.tool, data.brushSize);
-      isRemoteDrawRef.current = false;
-      saveStateWithDebounce();
+      allStrokesRef.current.push({ type: "draw", ...data });
+      if (data.pageIndex === currentPage) {
+        isRemoteDrawRef.current = true;
+        drawLine(data.fromX, data.fromY, data.x, data.y, data.color, data.tool, data.brushSize);
+        isRemoteDrawRef.current = false;
+        saveStateWithDebounce();
+      }
     });
     socket.on("receive-shape", (data) => {
-      isRemoteDrawRef.current = true;
-      drawShape(data.startX, data.startY, data.endX, data.endY, data.tool, data.color, data.brushSize);
-      isRemoteDrawRef.current = false;
-      saveStateWithDebounce();
+      allStrokesRef.current.push({ type: "shape", ...data });
+      if (data.pageIndex === currentPage) {
+        isRemoteDrawRef.current = true;
+        drawShape(data.startX, data.startY, data.endX, data.endY, data.tool, data.color, data.brushSize);
+        isRemoteDrawRef.current = false;
+        saveStateWithDebounce();
+      }
     });
     socket.on("receive-text", (data) => {
-      isRemoteDrawRef.current = true;
-      drawText(data.x, data.y, data.text, data.color, data.brushSize);
-      isRemoteDrawRef.current = false;
-      saveStateWithDebounce();
+      allStrokesRef.current.push({ type: "text", ...data });
+      if (data.pageIndex === currentPage) {
+        isRemoteDrawRef.current = true;
+        drawText(data.x, data.y, data.text, data.color, data.brushSize);
+        isRemoteDrawRef.current = false;
+        saveStateWithDebounce();
+      }
     });
     socket.on("receive-bucket-fill", (data) => {
-      isRemoteDrawRef.current = true;
-      floodFill(data.x, data.y, data.color);
-      isRemoteDrawRef.current = false;
-      saveStateWithDebounce();
+      allStrokesRef.current.push({ type: "bucket-fill", ...data });
+      if (data.pageIndex === currentPage) {
+        isRemoteDrawRef.current = true;
+        floodFill(data.x, data.y, data.color);
+        isRemoteDrawRef.current = false;
+        saveStateWithDebounce();
+      }
     });
     socket.on("receive-fill-area", (data) => {
-      isRemoteDrawRef.current = true;
-      const ctx = canvasRef.current?.getContext("2d");
-      if (ctx) { ctx.fillStyle = data.color; ctx.fillRect(data.x, data.y, data.width, data.height); }
-      isRemoteDrawRef.current = false;
-      saveStateWithDebounce();
+      allStrokesRef.current.push({ type: "fill-area", ...data });
+      if (data.pageIndex === currentPage) {
+        isRemoteDrawRef.current = true;
+        const ctx = canvasRef.current?.getContext("2d");
+        if (ctx) { ctx.fillStyle = data.color; ctx.fillRect(data.x, data.y, data.width, data.height); }
+        isRemoteDrawRef.current = false;
+        saveStateWithDebounce();
+      }
     });
-    socket.on("receive-clear", () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
-      saveState();
+    socket.on("receive-clear", ({ pageIndex }) => {
+      allStrokesRef.current = allStrokesRef.current.filter(s => s.pageIndex !== pageIndex);
+      if (pageIndex === currentPage) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+        saveState();
+      }
     });
     socket.on("load-board", (strokes) => {
+      allStrokesRef.current = strokes;
       redrawBoard(strokes);
     });
     return () => {
@@ -293,8 +329,11 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     const snapshot = pages[currentPage]?.snapshot;
     if (snapshot) {
       drawSnapshotOnCanvas(snapshot);
+    } else {
+      // If no snapshot, redraw from allStrokesRef
+      redrawBoard(allStrokesRef.current);
     }
-  }, [currentPage, canvasSize, isAllowedToDraw]);
+  }, [currentPage, canvasSize, isAllowedToDraw, redrawBoard]);
 
   useEffect(() => { setSelectedArea(null); }, [tool]);
 
@@ -321,7 +360,8 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
         if (ctx) {
           ctx.fillStyle = color;
           ctx.fillRect(selectedArea.x, selectedArea.y, selectedArea.width, selectedArea.height);
-          if (classId) socket.emit("fill-area", { classId, ...selectedArea, color });
+          if (classId) socket.emit("fill-area", { classId, ...selectedArea, color, pageIndex: currentPage });
+          allStrokesRef.current.push({ type: "fill-area", pageIndex: currentPage, ...selectedArea, color });
           saveState();
         }
       }
@@ -329,7 +369,8 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     }
     if (tool === "bucket") {
       floodFill(x, y, color);
-      if (classId) socket.emit("bucket-fill", { classId, x, y, color });
+      if (classId) socket.emit("bucket-fill", { classId, x, y, color, pageIndex: currentPage });
+      allStrokesRef.current.push({ type: "bucket-fill", pageIndex: currentPage, x, y, color });
       saveState();
       return;
     }
@@ -348,7 +389,8 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     if (["pencil", "marker", "highlighter", "eraser"].includes(tool)) {
       if (previous.x === null) { lastLocalPointRef.current = { x, y }; return; }
       drawLine(previous.x, previous.y, x, y, color, tool, brushSize);
-      if (classId) socket.emit("draw", { classId, data: { fromX: previous.x, fromY: previous.y, x, y, color, tool, brushSize } });
+      if (classId) socket.emit("draw", { classId, data: { fromX: previous.x, fromY: previous.y, x, y, color, tool, brushSize }, pageIndex: currentPage });
+      allStrokesRef.current.push({ type: "draw", pageIndex: currentPage, fromX: previous.x, fromY: previous.y, x, y, color, tool, brushSize });
       lastLocalPointRef.current = { x, y };
     }
     if (tool === "text" && textSelecting) {
@@ -367,7 +409,8 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     const y = e.nativeEvent.offsetY;
     if (["rectangle","fill-rectangle","circle","fill-circle","triangle","fill-triangle","line","arrow"].includes(tool)) {
       drawShape(startX, startY, x, y, tool, color, brushSize);
-      if (classId) socket.emit("draw-shape", { classId, startX, startY, endX: x, endY: y, tool, color, brushSize });
+      if (classId) socket.emit("draw-shape", { classId, startX, startY, endX: x, endY: y, tool, color, brushSize, pageIndex: currentPage });
+      allStrokesRef.current.push({ type: "shape", pageIndex: currentPage, startX, startY, endX: x, endY: y, tool, color, brushSize });
     }
     if (tool === "text" && textSelecting) {
       setTextSelecting(false); setShowTextInput(true); setTextInput("");
@@ -388,7 +431,8 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
   const handleTextSubmit = useCallback(() => {
     if (textInput.trim()) {
       drawText(textPosition.x, textPosition.y, textInput.trim(), color, brushSize);
-      if (classId) socket.emit("draw-text", { classId, x: textPosition.x, y: textPosition.y, text: textInput.trim(), color, brushSize });
+      if (classId) socket.emit("draw-text", { classId, x: textPosition.x, y: textPosition.y, text: textInput.trim(), color, brushSize, pageIndex: currentPage });
+      allStrokesRef.current.push({ type: "text", pageIndex: currentPage, x: textPosition.x, y: textPosition.y, text: textInput.trim(), color, brushSize });
       saveState();
     }
     setShowTextInput(false); setTextInput("");
@@ -436,8 +480,9 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.beginPath();
     setHistory([]); setRedoStack([]); updateCurrentPageSnapshot(null);
-    if (classId) socket.emit("clear-board", classId);
-  }, [isAllowedToDraw, classId, updateCurrentPageSnapshot]);
+    allStrokesRef.current = allStrokesRef.current.filter(s => s.pageIndex !== currentPage);
+    if (classId) socket.emit("clear-board", { classId, pageIndex: currentPage });
+  }, [isAllowedToDraw, classId, updateCurrentPageSnapshot, currentPage]);
 
   const downloadBoard = useCallback(() => {
     const canvas = canvasRef.current;

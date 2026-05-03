@@ -66,82 +66,86 @@ const initializeSocket = (io) => {
     });
 
     /* DRAW (permission safe) */
-    socket.on("draw", async ({ classId, data }) => {
+    socket.on("draw", async ({ classId, data, pageIndex }) => {
       const user = classSessions[classId]?.[socket.id];
       if (!user || (!user.canDraw && user.role !== "teacher")) {
         return socket.emit("draw-not-allowed");
       }
 
-      socket.to(classId).emit("receive-draw", data);
+      socket.to(classId).emit("receive-draw", { ...data, pageIndex });
       
-      // Save to MongoDB
+      // Save to MongoDB with pageIndex
       await Board.findOneAndUpdate(
         { classId },
-        { $push: { strokes: { type: "draw", ...data } } }
+        { $push: { strokes: { type: "draw", pageIndex: pageIndex || 0, ...data } } }
       );
     });
 
     /* DRAW SHAPE */
     socket.on("draw-shape", async (data) => {
-      const { classId } = data;
+      const { classId, pageIndex } = data;
       const user = classSessions[classId]?.[socket.id];
       if (!user || (!user.canDraw && user.role !== "teacher")) return;
 
       socket.to(classId).emit("receive-shape", data);
       await Board.findOneAndUpdate(
         { classId },
-        { $push: { strokes: { type: "shape", ...data } } }
+        { $push: { strokes: { type: "shape", pageIndex: pageIndex || 0, ...data } } }
       );
     });
 
     /* DRAW TEXT */
     socket.on("draw-text", async (data) => {
-      const { classId } = data;
+      const { classId, pageIndex } = data;
       const user = classSessions[classId]?.[socket.id];
       if (!user || (!user.canDraw && user.role !== "teacher")) return;
 
       socket.to(classId).emit("receive-text", data);
       await Board.findOneAndUpdate(
         { classId },
-        { $push: { strokes: { type: "text", ...data } } }
+        { $push: { strokes: { type: "text", pageIndex: pageIndex || 0, ...data } } }
       );
     });
 
     /* BUCKET FILL */
     socket.on("bucket-fill", async (data) => {
-      const { classId } = data;
+      const { classId, pageIndex } = data;
       const user = classSessions[classId]?.[socket.id];
       if (!user || (!user.canDraw && user.role !== "teacher")) return;
 
       socket.to(classId).emit("receive-bucket-fill", data);
       await Board.findOneAndUpdate(
         { classId },
-        { $push: { strokes: { type: "bucket-fill", ...data } } }
+        { $push: { strokes: { type: "bucket-fill", pageIndex: pageIndex || 0, ...data } } }
       );
     });
 
     /* FILL AREA */
     socket.on("fill-area", async (data) => {
-      const { classId } = data;
+      const { classId, pageIndex } = data;
       const user = classSessions[classId]?.[socket.id];
       if (!user || (!user.canDraw && user.role !== "teacher")) return;
 
       socket.to(classId).emit("receive-fill-area", data);
       await Board.findOneAndUpdate(
         { classId },
-        { $push: { strokes: { type: "fill-area", ...data } } }
+        { $push: { strokes: { type: "fill-area", pageIndex: pageIndex || 0, ...data } } }
       );
     });
 
     /* CLEAR */
-    socket.on("clear-board", async (classId) => {
+    socket.on("clear-board", async ({ classId, pageIndex }) => {
       const user = classSessions[classId]?.[socket.id];
       if (!user || (!user.canDraw && user.role !== "teacher")) {
         return socket.emit("draw-not-allowed");
       }
 
-      io.to(classId).emit("receive-clear");
-      await Board.findOneAndUpdate({ classId }, { $set: { strokes: [] } });
+      io.to(classId).emit("receive-clear", { pageIndex });
+      // Remove only strokes for this page
+      await Board.findOneAndUpdate(
+        { classId }, 
+        { $pull: { strokes: { pageIndex: pageIndex || 0 } } }
+      );
     });
 
     /* END CLASS */
