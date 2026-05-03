@@ -167,6 +167,52 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     }, 1000);
   }, [saveState]);
 
+  const redrawBoard = useCallback((strokes) => {
+    if (!strokes || !Array.isArray(strokes)) return;
+    isRemoteDrawRef.current = true;
+    strokes.forEach((s) => {
+      if (s.type === "draw") drawLine(s.fromX, s.fromY, s.x, s.y, s.color, s.tool, s.brushSize);
+      else if (s.type === "shape") drawShape(s.startX, s.startY, s.endX, s.endY, s.tool, s.color, s.brushSize);
+      else if (s.type === "text") drawText(s.x, s.y, s.text, s.color, s.brushSize);
+      else if (s.type === "bucket-fill") floodFill(s.x, s.y, s.color);
+      else if (s.type === "fill-area") {
+        const ctx = canvasRef.current?.getContext("2d");
+        if (ctx) { ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.width, s.height); }
+      }
+    });
+    isRemoteDrawRef.current = false;
+    saveState();
+  }, [drawLine, drawShape, drawText, floodFill, saveState]);
+
+  // ─── Initial Load from MongoDB ──────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!classId) return;
+
+    const fetchBoard = async () => {
+      try {
+        const apiUrl = (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL !== "undefined") 
+          ? import.meta.env.VITE_API_URL 
+          : "https://digital-whiteboard-2-1.onrender.com";
+        
+        const res = await fetch(`${apiUrl}/api/board/load/${classId}`, {
+          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.strokes) {
+            redrawBoard(data.strokes);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial board data:", err);
+      }
+    };
+
+    fetchBoard();
+  }, [classId, redrawBoard]);
+
   // ─── Socket Listeners ───────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -208,19 +254,7 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
       saveState();
     });
     socket.on("load-board", (strokes) => {
-      isRemoteDrawRef.current = true;
-      strokes.forEach((s) => {
-        if (s.type === "draw") drawLine(s.fromX, s.fromY, s.x, s.y, s.color, s.tool, s.brushSize);
-        else if (s.type === "shape") drawShape(s.startX, s.startY, s.endX, s.endY, s.tool, s.color, s.brushSize);
-        else if (s.type === "text") drawText(s.x, s.y, s.text, s.color, s.brushSize);
-        else if (s.type === "bucket-fill") floodFill(s.x, s.y, s.color);
-        else if (s.type === "fill-area") {
-          const ctx = canvasRef.current?.getContext("2d");
-          if (ctx) { ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, s.width, s.height); }
-        }
-      });
-      isRemoteDrawRef.current = false;
-      saveState();
+      redrawBoard(strokes);
     });
     return () => {
       socket.off("receive-draw");
@@ -243,17 +277,10 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
       const nextWidth = Math.max(700, Math.floor(container.clientWidth - 16));
       const nextHeight = Math.max(420, Math.floor(container.clientHeight - 16));
       if (nextWidth === canvas.width && nextHeight === canvas.height) return;
-      const previous = canvas.toDataURL();
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = nextWidth;
-        canvas.height = nextHeight;
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, nextWidth, nextHeight);
-        if (previous) ctx.drawImage(img, 0, 0, nextWidth, nextHeight);
-        setCanvasSize({ width: nextWidth, height: nextHeight });
-      };
-      img.src = previous;
+      
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
+      setCanvasSize({ width: nextWidth, height: nextHeight });
     };
     resizeCanvas();
     const observer = new ResizeObserver(resizeCanvas);
@@ -261,20 +288,13 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     return () => observer.disconnect();
   }, []);
 
+  // Restore on page change, size change, or permission change
   useEffect(() => {
     const snapshot = pages[currentPage]?.snapshot;
     if (snapshot) {
       drawSnapshotOnCanvas(snapshot);
     }
-    // Only clear history/redo on actual page change, not on snapshot updates
-  }, [currentPage]);
-
-  // Restore on mount or permission change if canvas is empty
-  useEffect(() => {
-    if (pages[currentPage]?.snapshot) {
-      drawSnapshotOnCanvas(pages[currentPage].snapshot);
-    }
-  }, [isAllowedToDraw]);
+  }, [currentPage, canvasSize, isAllowedToDraw]);
 
   useEffect(() => { setSelectedArea(null); }, [tool]);
 
