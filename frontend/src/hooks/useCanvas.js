@@ -176,8 +176,9 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
 
     isRemoteDrawRef.current = true;
     strokes.forEach((s) => {
-      // Only draw if it belongs to the current page
-      if (s.pageIndex !== currentPage) return;
+      // Only draw if it belongs to the current page (default to 0 for old strokes)
+      const sPageIndex = s.pageIndex || 0;
+      if (sPageIndex !== currentPage) return;
 
       if (s.type === "draw") drawLine(s.fromX, s.fromY, s.x, s.y, s.color, s.tool, s.brushSize);
       else if (s.type === "shape") drawShape(s.startX, s.startY, s.endX, s.endY, s.tool, s.color, s.brushSize);
@@ -188,8 +189,10 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
       }
     });
     isRemoteDrawRef.current = false;
-    saveState();
-  }, [drawLine, drawShape, drawText, floodFill, saveState, currentPage]);
+    // Update the snapshot for this page without affecting history/redo
+    const data = canvas.toDataURL();
+    updateCurrentPageSnapshot(data);
+  }, [drawLine, drawShape, drawText, floodFill, updateCurrentPageSnapshot, currentPage]);
 
   // ─── Initial Load from MongoDB ──────────────────────────────────────────────
 
@@ -326,12 +329,14 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
 
   // Restore on page change, size change, or permission change
   useEffect(() => {
-    const snapshot = pages[currentPage]?.snapshot;
-    if (snapshot) {
-      drawSnapshotOnCanvas(snapshot);
-    } else {
-      // If no snapshot, redraw from allStrokesRef
+    // Prefer redrawing from strokes to ensure accuracy after page/size changes
+    if (allStrokesRef.current && allStrokesRef.current.length > 0) {
       redrawBoard(allStrokesRef.current);
+    } else {
+      const snapshot = pages[currentPage]?.snapshot;
+      if (snapshot) {
+        drawSnapshotOnCanvas(snapshot);
+      }
     }
   }, [currentPage, canvasSize, isAllowedToDraw, redrawBoard]);
 
