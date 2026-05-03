@@ -21,7 +21,10 @@ export default function useClassRoom() {
   }, []);
 
   useEffect(() => {
-    const storedClassId = localStorage.getItem("classId") || "default-class";
+    const params = new URLSearchParams(window.location.search);
+    const urlClassId = params.get("classId");
+    const storedClassId = urlClassId || localStorage.getItem("classId") || "default-class";
+    if (urlClassId) localStorage.setItem("classId", urlClassId);
     let storedUserId = localStorage.getItem("userId");
     const storedUserName = localStorage.getItem("userName") || "User";
     const storedUserRole = localStorage.getItem("userRole") || "student";

@@ -159,6 +159,14 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     updateCurrentPageSnapshot(data);
   }, [updateCurrentPageSnapshot]);
 
+  const saveStateDebounced = useRef(null);
+  const saveStateWithDebounce = useCallback(() => {
+    if (saveStateDebounced.current) clearTimeout(saveStateDebounced.current);
+    saveStateDebounced.current = setTimeout(() => {
+      saveState();
+    }, 1000);
+  }, [saveState]);
+
   // ─── Socket Listeners ───────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -166,32 +174,38 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
       isRemoteDrawRef.current = true;
       drawLine(data.fromX, data.fromY, data.x, data.y, data.color, data.tool, data.brushSize);
       isRemoteDrawRef.current = false;
+      saveStateWithDebounce();
     });
     socket.on("receive-shape", (data) => {
       isRemoteDrawRef.current = true;
       drawShape(data.startX, data.startY, data.endX, data.endY, data.tool, data.color, data.brushSize);
       isRemoteDrawRef.current = false;
+      saveStateWithDebounce();
     });
     socket.on("receive-text", (data) => {
       isRemoteDrawRef.current = true;
       drawText(data.x, data.y, data.text, data.color, data.brushSize);
       isRemoteDrawRef.current = false;
+      saveStateWithDebounce();
     });
     socket.on("receive-bucket-fill", (data) => {
       isRemoteDrawRef.current = true;
       floodFill(data.x, data.y, data.color);
       isRemoteDrawRef.current = false;
+      saveStateWithDebounce();
     });
     socket.on("receive-fill-area", (data) => {
       isRemoteDrawRef.current = true;
       const ctx = canvasRef.current?.getContext("2d");
       if (ctx) { ctx.fillStyle = data.color; ctx.fillRect(data.x, data.y, data.width, data.height); }
       isRemoteDrawRef.current = false;
+      saveStateWithDebounce();
     });
     socket.on("receive-clear", () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+      saveState();
     });
     return () => {
       socket.off("receive-draw");
@@ -201,7 +215,7 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
       socket.off("receive-fill-area");
       socket.off("receive-clear");
     };
-  }, [drawLine, drawShape, drawText, floodFill]);
+  }, [drawLine, drawShape, drawText, floodFill, saveState, saveStateWithDebounce]);
 
   // ─── Canvas Resize ──────────────────────────────────────────────────────────
 
@@ -232,10 +246,19 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
   }, []);
 
   useEffect(() => {
-    drawSnapshotOnCanvas(pages[currentPage]?.snapshot || null);
-    setHistory([]);
-    setRedoStack([]);
+    const snapshot = pages[currentPage]?.snapshot;
+    if (snapshot) {
+      drawSnapshotOnCanvas(snapshot);
+    }
+    // Only clear history/redo on actual page change, not on snapshot updates
   }, [currentPage]);
+
+  // Restore on mount or permission change if canvas is empty
+  useEffect(() => {
+    if (pages[currentPage]?.snapshot) {
+      drawSnapshotOnCanvas(pages[currentPage].snapshot);
+    }
+  }, [isAllowedToDraw]);
 
   useEffect(() => { setSelectedArea(null); }, [tool]);
 
