@@ -8,7 +8,7 @@ export default function Classroom() {
 
   const createClass = async () => {
 
-    const res = await fetch("/api/classroom/create", {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/classroom/create`, {
 
       method: "POST",
 
@@ -39,7 +39,7 @@ export default function Classroom() {
 
     const code = prompt("Enter class code");
 
-    const res = await fetch("/api/classroom/join", {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/classroom/join`, {
 
       method: "POST",
 

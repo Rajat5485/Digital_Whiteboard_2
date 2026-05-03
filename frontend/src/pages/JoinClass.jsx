@@ -16,7 +16,7 @@ export default function JoinClass() {
       }
 
       try {
-        const res = await fetch(`/api/classrooms/${classId}`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/classrooms/${classId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
