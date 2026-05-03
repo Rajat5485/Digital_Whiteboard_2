@@ -1,6 +1,8 @@
 import Attendance from "../models/Attendance.js";
 import Note from "../models/Note.js";
 import Board from "../models/Board.js";
+import User from "../models/User.js";
+import { sendAttendanceEmail } from "../utils/mailer.js";
 
 const classSessions = {};
 
@@ -187,16 +189,33 @@ const initializeSocket = (io) => {
     });
 
     /* APPROVE ATTENDANCE */
-    socket.on("approve-attendance", ({ classId, targetSocketId }) => {
+    socket.on("approve-attendance", async ({ classId, targetSocketId }) => {
       const user = classSessions[classId]?.[socket.id];
       if (!user || user.role !== "teacher") return;
 
       if (classSessions[classId][targetSocketId]) {
         classSessions[classId][targetSocketId].attendanceApproved = true;
+        
+        // Notify student
         io.to(targetSocketId).emit("attendance-approved", {
           message: "Your attendance has been approved by the teacher.",
         });
         broadcastUserList(io, classId);
+
+        // Send email to teacher
+        try {
+          const teacherDoc = await User.findOne({ userId: user.userId });
+          if (teacherDoc) {
+            const allUsers = getClassUsers(classId);
+            const presentStudents = allUsers
+              .filter(u => u.role === "student")
+              .map(u => u.userName);
+            
+            await sendAttendanceEmail(teacherDoc.email, teacherDoc.name, presentStudents);
+          }
+        } catch (err) {
+          console.error("Failed to process attendance email:", err);
+        }
       }
     });
 
