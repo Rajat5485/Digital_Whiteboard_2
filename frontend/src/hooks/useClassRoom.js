@@ -12,6 +12,8 @@ export default function useClassRoom() {
   const [notifications, setNotifications] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [teacherNotes, setTeacherNotes] = useState([]);
+  const [hasSentNotes, setHasSentNotes] = useState(false);
+  const [hasSentAttendance, setHasSentAttendance] = useState(false);
 
   const isTeacher = userRole === "teacher";
   const isAllowedToDraw = canDraw || isTeacher;
@@ -86,6 +88,11 @@ export default function useClassRoom() {
       handleLogout();
     });
 
+    socket.on("duplicate-login", () => {
+      alert("You have been disconnected because your account logged in from another tab or device.");
+      handleLogout();
+    });
+
     return () => {
       socket.off("update-user-list");
       socket.off("draw-permission-changed");
@@ -97,6 +104,7 @@ export default function useClassRoom() {
       socket.off("hand-raised-notification");
       socket.off("attendance-approved");
       socket.off("class-ended");
+      socket.off("duplicate-login");
     };
   }, [updateNotifications, handleLogout]);
 
@@ -133,20 +141,35 @@ export default function useClassRoom() {
     }
     socket.emit("send-notes-to-selected", { classId, notes: notes.trim(), recipientUserIds: selectedStudents });
     updateNotifications("Notes sent to selected students.");
+    setHasSentNotes(true);
     setSelectedStudents([]);
   }, [classId, selectedStudents, updateNotifications]);
 
   const handleEndClass = useCallback(() => {
     if (!classId || !isTeacher) return;
+
+    // Alert teacher if notes or attendance are unsent
+    if (!hasSentNotes || !hasSentAttendance) {
+      let warning = "⚠️ Wait! You haven't sent:\n";
+      if (!hasSentNotes) warning += " - Lecture Notes\n";
+      if (!hasSentAttendance) warning += " - Attendance Report\n";
+      warning += "\nDo you still want to end the session without sending them?";
+      
+      const confirmEnd = window.confirm(warning);
+      if (!confirmEnd) return;
+    }
+
     if (window.confirm("Are you sure you want to end the class? All board data will be deleted.")) {
       socket.emit("end-class", classId);
     }
-  }, [classId, isTeacher]);
+  }, [classId, isTeacher, hasSentNotes, hasSentAttendance]);
 
   return {
     classId, userId, userName, userRole, isTeacher, isAllowedToDraw,
     canDraw, handRaised, classUsers, notifications, selectedStudents,
     teacherNotes, updateNotifications,
+    hasSentNotes, setHasSentNotes,
+    hasSentAttendance, setHasSentAttendance,
     startRaiseHand, handleToggleDrawPermission, handleApproveAttendance,
     toggleSelectedStudent, handleSendNotes, handleLogout, handleEndClass,
   };

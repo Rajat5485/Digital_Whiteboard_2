@@ -47,6 +47,36 @@ router.get("/teacher", protect, async (req, res) => {
   res.json(classrooms);
 });
 
+/* UPDATE CLASS ATTENDANCE CRITERIA */
+router.post("/update-criteria", protect, async (req, res) => {
+  const { classId, minimumTimeRequired } = req.body;
+  try {
+    const classroom = await Classroom.findOne({ _id: classId, teacher: req.user._id });
+    if (!classroom) {
+      return res.status(404).json({ message: "Class not found or not authorized" });
+    }
+    // Convert minutes input to seconds
+    classroom.minimumTimeRequired = Math.max(1, Number(minimumTimeRequired)) * 60;
+    await classroom.save();
+    res.json({ message: "Attendance criteria updated", minimumTimeRequired: classroom.minimumTimeRequired });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/* GET SINGLE CLASSROOM BY ID */
+router.get("/:classId", protect, async (req, res) => {
+  try {
+    const classroom = await Classroom.findById(req.params.classId);
+    if (!classroom) {
+      return res.status(404).json({ message: "Classroom not found" });
+    }
+    res.json(classroom);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 /* GET STUDENT'S CLASSES */
 
 router.get("/student", protect, async (req, res) => {

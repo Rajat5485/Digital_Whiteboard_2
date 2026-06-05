@@ -6,6 +6,7 @@ export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("student");
 
   const navigate = useNavigate();
 
@@ -30,7 +31,7 @@ export default function Register() {
           name,
           email,
           password,
-          role: "student"
+          role
         })
 
       });
@@ -90,6 +91,18 @@ export default function Register() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
           />
+
+          <div className="flex flex-col space-y-1">
+            <label className="text-xs font-semibold text-slate-500 px-1">Register As</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-slate-700"
+            >
+              <option value="student">Student (छात्र)</option>
+              <option value="teacher">Teacher (शिक्षक)</option>
+            </select>
+          </div>
 
           <button
             onClick={handleRegister}

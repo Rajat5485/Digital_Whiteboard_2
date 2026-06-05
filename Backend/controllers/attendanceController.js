@@ -1,10 +1,13 @@
 import Attendance from "../models/Attendance.js";
+import Classroom from "../models/Classroom.js";
 
 export const markAttendance = async (req, res) => {
   try {
     const { classId, tabActiveDuration, activeTime } = req.body;
     const today = new Date().toISOString().split("T")[0];
-    const minimumTimeRequired = 600; // 10 minutes in seconds
+    
+    const classroom = await Classroom.findById(classId);
+    const minimumTimeRequired = classroom?.minimumTimeRequired || 600; // default 10 minutes in seconds
 
     // Check if attendance already marked today
     let attendance = await Attendance.findOne({
@@ -58,7 +61,9 @@ export const updateAttendanceTime = async (req, res) => {
   try {
     const { classId, tabActiveDuration, activeTime } = req.body;
     const today = new Date().toISOString().split("T")[0];
-    const minimumTimeRequired = 600;
+
+    const classroom = await Classroom.findById(classId);
+    const minimumTimeRequired = classroom?.minimumTimeRequired || 600;
 
     let attendance = await Attendance.findOne({
       user: req.user._id,

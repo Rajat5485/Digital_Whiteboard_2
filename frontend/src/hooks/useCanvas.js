@@ -40,9 +40,16 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     if (drawTool === "marker") { ctx.strokeStyle = lineColor; ctx.lineWidth = size * 2; }
     else if (drawTool === "highlighter") { ctx.strokeStyle = lineColor; ctx.globalAlpha = 0.3; }
     else if (drawTool === "eraser") { ctx.strokeStyle = "white"; }
+    else if (drawTool === "paintbrush") { 
+      ctx.strokeStyle = lineColor; 
+      ctx.globalAlpha = 0.8; 
+      ctx.shadowBlur = size / 2; 
+      ctx.shadowColor = lineColor; 
+    }
     else { ctx.strokeStyle = lineColor; }
     ctx.stroke();
     ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
   }, []);
 
   const drawText = useCallback((x, y, text, textColor, fontSize) => {
@@ -391,7 +398,7 @@ export default function useCanvas({ classId, color, tool, brushSize, isAllowedTo
     const x = e.nativeEvent.offsetX;
     const y = e.nativeEvent.offsetY;
     const previous = lastLocalPointRef.current;
-    if (["pencil", "marker", "highlighter", "eraser"].includes(tool)) {
+    if (["pencil", "marker", "highlighter", "eraser", "paintbrush"].includes(tool)) {
       if (previous.x === null) { lastLocalPointRef.current = { x, y }; return; }
       drawLine(previous.x, previous.y, x, y, color, tool, brushSize);
       if (classId) socket.emit("draw", { classId, data: { fromX: previous.x, fromY: previous.y, x, y, color, tool, brushSize }, pageIndex: currentPage });

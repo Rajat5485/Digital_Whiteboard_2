@@ -9,6 +9,11 @@ const classroomSchema = new mongoose.Schema({
   teacher: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User"
+  },
+
+  minimumTimeRequired: {
+    type: Number,
+    default: 600 // 10 minutes in seconds
   }
 
 });

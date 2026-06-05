@@ -36,7 +36,7 @@ export const getBoard = async (req, res) => {
 
     const board = await Board.findOne({ classId });
 
-    if (!board) {
+    if (!board) { 
       return res.json({ strokes: [] });
     }
 

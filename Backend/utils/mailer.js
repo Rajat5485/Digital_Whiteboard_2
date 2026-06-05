@@ -3,13 +3,19 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
+const emailUser = process.env.EMAIL_USER || "";
+const isGmail = emailUser.endsWith("@gmail.com");
+
+export const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
+
+
+
 
 export const sendAttendanceEmail = async (teacherEmail, teacherName, presentStudents) => {
   try {
@@ -29,3 +35,37 @@ export const sendAttendanceEmail = async (teacherEmail, teacherName, presentStud
     return false;
   }
 };
+
+export const sendNotesEmail = async (toEmail, subject, text, attachmentBase64 = null, filename = "whiteboard-notes.pdf", replyTo = null, fromName = null) => {
+  try {
+    const fromHeader = fromName ? `"${fromName}" <${process.env.EMAIL_USER}>` : process.env.EMAIL_USER;
+    const mailOptions = {
+      from: fromHeader,
+      to: toEmail,
+      subject: subject,
+      text: text,
+      ...(replyTo && { replyTo }),
+    };
+
+    if (attachmentBase64) {
+      mailOptions.attachments = [
+        {
+          filename: filename || "whiteboard-notes.pdf",
+          content: attachmentBase64.split("base64,")[1],
+          encoding: "base64",
+        },
+      ];
+    }
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Email sent to ${toEmail}`);
+    return true;
+  } catch (error) {
+    console.error("❌ Nodemailer Error:", error.message);
+    if (error.response) console.error("❌ SMTP Response:", error.response);
+    return false;
+  }
+};
+
+
+

@@ -11,6 +11,7 @@ export default function Whiteboard() {
   const [brushSize, setBrushSize] = useState(5);
   const [showToolbar, setShowToolbar] = useState(true);
   const [showChat, setShowChat] = useState(true);
+  const [showParticipants, setShowParticipants] = useState(true);
 
   const navigate = useNavigate();
 
@@ -26,8 +27,8 @@ export default function Whiteboard() {
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
       {showToolbar && (
-        <header className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-3">
+        <header className="p-4 bg-gray-50 border-b border-gray-200/60">
+          <div className="max-w-7xl mx-auto">
             <Toolbar
               tool={tool}
               setColor={setColor}
@@ -55,7 +56,11 @@ export default function Whiteboard() {
               tool={tool}
               brushSize={brushSize}
               showToolbar={showToolbar}
+              setShowToolbar={setShowToolbar}
               showChat={showChat}
+              setShowChat={setShowChat}
+              showParticipants={showParticipants}
+              setShowParticipants={setShowParticipants}
             />
           </div>
         </div>
